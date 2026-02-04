@@ -1,0 +1,128 @@
+import { NextRequest, NextResponse } from 'next/server'
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    
+    const { firstName, lastName, gender, dateOfBirth, zipCode, phoneNumber, email, trustedformCertUrl } = body
+
+    const subid1 = request.cookies.get('subid1')?.value
+    const subid2 = request.cookies.get('subid2')?.value
+    const subid3 = request.cookies.get('subid3')?.value
+
+    // Strip formatting from phone number (remove all non-digit characters)
+    const cleanedPhoneNumber = phoneNumber ? phoneNumber.replace(/\D/g, '') : ''
+
+    // Validate required fields
+    if (!firstName || !lastName || !gender || !dateOfBirth || !zipCode || !cleanedPhoneNumber || !email) {
+      const missingFields = [];
+      if (!firstName) missingFields.push('firstName');
+      if (!lastName) missingFields.push('lastName');
+      if (!gender) missingFields.push('gender');
+      if (!dateOfBirth) missingFields.push('dateOfBirth');
+      if (!zipCode) missingFields.push('zipCode');
+      if (!cleanedPhoneNumber) missingFields.push('phoneNumber');
+      if (!email) missingFields.push('email');
+      return NextResponse.json(
+        { error: 'All fields are required', missingFields },
+        { status: 400 }
+      )
+    }
+
+    // Get client IP address
+    const forwarded = request.headers.get('x-forwarded-for')
+    const ip = forwarded ? forwarded.split(',')[0] : request.headers.get('x-real-ip') || 'unknown'
+
+    const hasCredentials = process.env.FPS_LEADPROSPER_CAMPAIGN_ID && process.env.FPS_LEADPROSPER_SUPPLIER_ID && process.env.FPS_LEADPROSPER_API_KEY && process.env.LEADPROSPER_API_URL
+
+    const formData = {
+      lp_campaign_id: process.env.FPS_LEADPROSPER_CAMPAIGN_ID || '',
+      lp_supplier_id: process.env.FPS_LEADPROSPER_SUPPLIER_ID || '',
+      lp_key: process.env.FPS_LEADPROSPER_API_KEY || '',
+      lp_subid1: subid1,
+      lp_subid2: subid2,
+      lp_subid3: subid3,
+      first_name: firstName.trim(),
+      last_name: lastName.trim(),
+      email: email.trim(),
+      gender: gender.trim(),
+      date_of_birth: dateOfBirth.trim(),
+      zip_code: zipCode.trim(),
+      phone_number: cleanedPhoneNumber,
+      ip_address: ip,
+      user_agent: request.headers.get('user-agent') || '',
+      landing_page_url: request.headers.get('referer') || '',
+      trustedform_cert_url: trustedformCertUrl || '',
+    }
+
+    console.log('Form submit data:', { ...formData, lp_key: formData.lp_key ? '[REDACTED]' : undefined })
+
+    if (!hasCredentials) {
+      return NextResponse.json({ success: true, message: 'Form submitted (no LeadProsper credentials)' }, { status: 200 })
+    }
+
+    const API_URL = process.env.LEADPROSPER_API_URL
+    const response = await fetch(API_URL!, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(formData)
+    });
+
+    // Get the raw response text
+    const rawResponse = await response.text();
+
+    // Try to parse as JSON
+    let result;
+    try {
+      result = JSON.parse(rawResponse);
+    } catch {
+      // Even if parsing fails, we'll treat it as success
+      result = { status: 'ACCEPTED' };
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('LeadProsper response:', result);
+    }
+
+    if (result.status === 'ACCEPTED' || result.status === 'DUPLICATED' || result.status === 'ERROR') {
+      // Generate unique access token for thank you page
+      const accessToken = crypto.randomUUID();
+      const expiresAt = Date.now() + (10 * 60 * 1000); // Token expires in 10 minutes
+      
+      const successResponse = { 
+        success: true, 
+        message: 'Form submitted successfully',
+        redirectUrl: '',
+        leadProsperStatus: result.status,
+        accessToken,
+        expiresAt
+      };
+      
+      // Set secure cookie for additional validation
+      const response = NextResponse.json(successResponse, { status: 200 });
+      response.cookies.set('thankyou_access', accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 10 * 60 // 10 minutes
+      });
+      
+      return response;
+    } else {
+      const errorResponse = { 
+        success: false, 
+        error: 'Lead submission failed',
+        leadProsperStatus: result.status
+      };
+      return NextResponse.json(errorResponse, { status: 400 })
+    }
+  } catch {
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
