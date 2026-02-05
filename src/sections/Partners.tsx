@@ -5,26 +5,26 @@ import Image from 'next/image'
 const partner = [
     {
         name: 'American Family Insurance',
-        image: '/american_family.png',
+        image: '/american-family.svg',
         width: 180,
         height: 60,
     },
     {
         name: 'AIG',
-        image: '/aig.jpg',
-        width: 180,
+        image: '/aig.png',
+        width: 100,
         height: 60,
     },
     {
         name: 'American National',
-        image: '/american_nation.png',
-        width: 200,
+        image: '/american-national.webp',
+        width: 110,
         height: 60,
     },
     {
         name: 'Nationwide',
         image: '/nationwide.svg',
-        width: 220,
+        width: 180,
         height: 60,
     }
 ]
