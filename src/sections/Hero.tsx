@@ -191,7 +191,7 @@ const Hero = () => {
         </div>
         <div className='w-full lg:w-1/2 flex justify-center shrink-0'>
           <Image
-            src="/landing-illustration.svg"
+            src="/life-illustration.svg"
             alt="Modern city skyline with eco-friendly buildings"
             width={800}
             height={800}

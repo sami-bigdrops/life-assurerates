@@ -23,7 +23,7 @@ const partner = [
     },
     {
         name: 'Nationwide',
-        image: '/nationwide.jpg',
+        image: '/nationwide.svg',
         width: 220,
         height: 60,
     }
